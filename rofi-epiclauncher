@@ -25,11 +25,14 @@ get_games_list() {
 }
 
 clear_cache() {
-	rm -f all_games_data all_games_data_f
-	rm -f games_names store_names
+	[ "$(pwd)" = "$CACHE" ] && {
+		rm -f all_games_data all_games_data_f
 
-	rm -f downloaded_games_data downloaded_games_data_f
-	rm -f downloaded_games_names downloaded_store_names
+		rm -f games_names store_names
+
+		rm -f downloaded_games_data downloaded_games_data_f
+		rm -f downloaded_games_names downloaded_store_names
+	}
 }
 
 format_data() {
