@@ -1,0 +1,98 @@
+#!/usr/bin/env sh
+
+get_games_list() {
+	alert "Downloading games list..." &
+
+	legendary list-games | head -n -2 | tail -n +3 1>all_games_data || {
+		exit 2 && alert "E1: Failed to download games list."
+	}
+
+	legendary list-installed | head -n -2 | tail -n+3 1>downloaded_games_data || {
+		exit 2 && alert "E2: Failed to get info about downloaded games."
+	}
+
+	# format data, remove unused informations
+	format_data "all_games_data" "$(wc -l < all_games_data)" "all_games_data_f"
+	format_data "downloaded_games_data" "$(wc -l < downloaded_games_data)" "downloaded_games_data_f"
+
+	# get games official names
+	get_official_names "all_games_data_f" "$(wc -l < all_games_data)" "games_names"
+	get_official_names "downloaded_games_data_f" "$(wc -l < downloaded_games_data)" "downloaded_games_names"
+	
+	# get games names from store (maybe codenames? idk)
+	get_store_names "all_games_data_f" "store_names"
+	get_store_names "downloaded_games_data_f" "downloaded_store_names"
+}
+
+clear_cache() {
+	rm -f all_games_data all_games_data_f
+	rm -f games_names store_names
+
+	rm -f downloaded_games_data downloaded_games_data_f
+	rm -f downloaded_games_names downloaded_store_names
+}
+
+format_data() {
+	i=1; while [ $i -le "$2" ]
+	do
+		var=$(sed -n "$i"p "$1" | cut -b 5-)
+		echo "${var%%\,*})" >> "$3"
+
+		i=$((i+1))
+	done
+}
+
+get_official_names() {
+	i=1; while [ $i -le "$2" ]
+  do
+  	var=$(sed -n "$i"p "$1")
+  	echo "${var%%\(*}" >> "$3"
+
+  	i=$((i+1))
+  done
+}
+
+get_store_names() {
+	grep -Eo "name: .*" "$1" | cut -b 7- | sed s/.$// >> "$2"
+}
+
+show_games() {
+	menu_lines="$(wc -l < "$3")"
+	[ "$menu_lines" -gt 30 ] && menu_lines=30
+	game=$(m -l "$menu_lines" -p "$1" < "$2")
+	[ ! "$game" ] && { clear_cache; exit 1; }
+	line_number="$(grep -n "$game" "$2" | cut -d : -f 1)"
+	game_store_name=$(sed -n "$line_number"p "$3")
+}
+
+run_game() {
+	legendary launch "$1"
+}
+
+# clear cache when process is killed
+trap clear_cache 2
+
+CACHE="$HOME/.cache/rofi-epiclauncher"
+mkdir -p "$CACHE"
+cd "$CACHE" || { 
+	exit 2 && echo "E3: Failed to change directory."; 
+}
+
+m() { rofi -dmenu -i "$@"; }
+alert() { rofi -e "$@"; }
+
+get_games_list && pkill rofi
+
+mode="$(
+	printf "Downloaded games\nAll games" | m -l 2 -p "What do you want to see?"
+)"
+
+if [ "$mode" = "Downloaded games" ]; then
+	show_games "Downloaded games"	"downloaded_games_names" "downloaded_store_names"
+elif [ "$mode" = "All games" ]; then
+	show_games "All games on account" "games_names" "store_names"
+else clear_cache; exit 1; fi
+
+run_game "$game_store_name"
+
+clear_cache; exit 0
