@@ -38,7 +38,7 @@ clear_cache() {
 format_data() {
 	i=1; while [ $i -le "$2" ]
 	do
-		var=$(sed -n "$i"p "$1" | cut -b 5-)
+		var=$(sed -n "$i"p "$1" | cut -b 4-)
 		echo "${var%%\,*})" >> "$3"
 
 		i=$((i+1))
@@ -76,7 +76,8 @@ run_game() {
 trap clear_cache 2
 
 CACHE="$HOME/.cache/rofi-epiclauncher"
-mkdir -p "$CACHE"
+LOG="$HOME/.log/rofi-epiclauncher"
+mkdir -p "$CACHE" "$LOG"
 cd "$CACHE" || { 
 	exit 2 && echo "E3: Failed to change directory."; 
 }
@@ -94,6 +95,18 @@ if [ "$mode" = "Downloaded games" ]; then
 	show_games "Downloaded games"	"downloaded_games_names" "downloaded_store_names"
 elif [ "$mode" = "All games" ]; then
 	show_games "All games on account" "games_names" "store_names"
+
+	[ ! "$(grep -q "$game_store_name" downloaded_store_names)" ] && {
+		check="$(printf "%s" "Download" | m -l 1 -p "Game not downloaded")"
+		[ ! "$check" ] && exit
+
+		[ ! "$(pgrep legendary)" ] && {
+			alert "Downloading in background..." &
+			legendary -y download "$game_store_name" 2>"$LOG/game_download.log"
+			clear_cache; exit 0
+		} || { clear_cache; exit 1; alert "Legendary client already running!"; }
+	}
+
 else clear_cache; exit 1; fi
 
 run_game "$game_store_name"
